@@ -1,0 +1,361 @@
+---
+title: "STAT6545 ASSIGNMENT 2"
+author: "Muhammad Haroon &vJames Oduro Ntiamoah"
+date: "2024-11-5"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r include=FALSE}
+library(MASS)
+library(mvtnorm)
+
+```
+
+
+```{r include=FALSE}
+# Question 1
+generate_logistic_data <- function(N) {
+
+  intercept <- 0.1
+  beta_1 <- 1.1
+  beta_2 <- -0.9
+  
+  covariate_1 <- runif(N, -2, 2)
+  covariate_2 <- runif(N, -2, 2)
+  
+  log_odds <- intercept + beta_1 * covariate_1 + beta_2 * covariate_2
+  
+  probabilities <- 1 / (1 + exp(-log_odds))
+  
+  responses <- rbinom(N, 1, probabilities)
+  
+  data1111 <- data.frame(covariate_1 = covariate_1, covariate_2 = covariate_2, response = responses)
+  return(data1111)
+}
+
+set.seed(7) 
+generated_data1 <- generate_logistic_data(10)
+
+table1::table1(~factor(generated_data1$response))
+
+generated_data2<- generate_logistic_data(50)
+table1::table1(~factor(generated_data2$response))
+
+generated_data3<- generate_logistic_data(100)
+table1::table1(~factor(generated_data3$response)) 
+```
+
+```{r}
+
+table(generated_data1$response)
+
+```
+
+```{r}
+table(generated_data2$response)
+
+
+```
+
+
+```{r}
+table(generated_data3$response)
+
+```
+
+
+
+
+
+```{r}
+
+# Question 2
+
+set.seed(7)
+# try with n=10, 50 and 100
+n <- 100
+x1 <- rnorm(n)
+x2 <- rnorm(n)
+beta_values <- c(0.1, 1.1,-0.9)
+logit <- beta_values[1] + beta_values[2] * x1 + beta_values[3] * x2
+prob <- 1 / (1 + exp(-logit))
+y <- rbinom(n, 1, prob)
+log_likelihood <- function(beta, x1, x2, y) {
+  logit <- beta[1] + beta[2] * x1 + beta[3] * x2
+  prob <- 1 / (1 + exp(-logit))
+  sum(dbinom(y, size = 1, prob = prob, log = TRUE))
+}
+
+log_prior <- function(beta) {
+  sum(dnorm(beta, mean = 0, sd = 1, log = TRUE))
+}
+
+log_posterior <- function(beta, x1, x2, y) {
+  log_likelihood(beta, x1, x2, y) + log_prior(beta)
+}
+p <- 3
+proposal_mean <- rep(0, p)
+proposal_sd <- 2
+proposal_cov <- diag(proposal_sd^2, p)
+
+N <- 20000
+proposal_samples <- MASS::mvrnorm(N, mu = proposal_mean, Sigma = proposal_cov)
+log_posterior_vals <- apply(proposal_samples, 1, log_posterior, x1 = x1, x2 = x2, y = y)
+log_proposal_vals <- dmvnorm(proposal_samples, mean = proposal_mean, sigma = proposal_cov, log = TRUE)
+log_weights <- log_posterior_vals - log_proposal_vals
+weights <- exp(log_weights - max(log_weights))
+weights <- weights / sum(weights)
+posterior_means <- colSums(weights * proposal_samples)
+posterior_se <- sqrt(colSums(weights * (proposal_samples - posterior_means)^2))
+effective_sample_size <- sum(weights)^2 / sum(weights^2)
+
+resample_indices <- sample(1:N, size = 10000, replace = TRUE, prob = weights)
+resampled_samples <- proposal_samples[resample_indices, ]
+par(mfrow = c(1, 3))
+hist(resampled_samples[, 1], main = "Posterior of beta_0", xlab = "beta_0")
+hist(resampled_samples[, 2], main = "Posterior of beta_1", xlab = "beta_1")
+hist(resampled_samples[, 3], main = "Posterior of beta_2", xlab = "beta_2")
+
+fit <- glm(y ~ x1 + x2, family = binomial(link = "logit"))
+mle_estimates <- coef(fit)
+
+
+posterior_means
+posterior_se
+effective_sample_size
+
+mle_estimates
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+                                                                             
+# Question 3
+
+log_posterior_new <- function(beta, x, y){
+  
+  logit <- beta[1] + x %*% beta[-1]
+  p<- 1 / (1 + exp(-logit))
+  
+  sum(dbinom(y, size = 1, prob = p, log = TRUE)) + sum(dnorm(beta, mean = 0, sd = 1, log = TRUE))
+}
+
+try <- function(n){
+  
+  x <- matrix(rnorm(n * 8), ncol = 8)
+  colnames(x) <- paste0("x", 1:8)
+  beta_new <- c(0.1, 1.1, -0.9, 0.5, -1, -0.5, 0.7, 1.2, -0.4)
+  
+  logit <- beta_new[1] + x %*% beta_new[-1]
+  p <- 1 / (1 + exp(-logit))
+  y <- rbinom(n, 1, p)
+  
+
+  proposal_mean <- numeric(9)
+  proposal_sd <- 2.5
+  proposal_cov <- diag(proposal_sd^2, 9)
+  
+  N <- 20000
+  proposal_samples <- MASS::mvrnorm(N, mu = proposal_mean, Sigma = proposal_cov)
+  log_posterior_vals <- apply(proposal_samples, 1, log_posterior_new, x = x, y = y)
+  log_proposal_vals <- dmvnorm(proposal_samples, mean = proposal_mean, sigma = proposal_cov, log = TRUE)
+  log_weights<- log_posterior_vals - log_proposal_vals
+  weights <- exp(log_weights - max(log_weights))
+  weights <- weights / sum(weights)
+    post_means <- colSums(weights * proposal_samples)
+  post_se <- sqrt(colSums(weights * (proposal_samples - post_means)^2))
+  sample_size <- sum(weights)^2 / sum(weights^2)
+    resample.indices <- sample(1:N, size = N, replace = TRUE, prob = weights)
+  resampled.samples <- proposal_samples[resample.indices, ]
+  
+  par(mfrow = c(3, 3))
+  for (i in 1:9) {
+    hist(resampled.samples[, i], main = paste("Posterior of beta", i - 1), xlab = paste("beta", i - 1), freq = F, col="skyblue")
+  }
+    model <- glm(y ~ x, family = binomial(link = "logit"))
+  standard.estimates <- coef(model)
+  standard.se <- sqrt(diag(vcov(model)))
+  
+  cat("Effective Sample Size:\n", sample_size, "\n\n")
+  cat("Posterior Means (Importance Sampling):\n", post_means, "\n")
+  cat("Posterior Standard Errors (Importance Sampling):\n", post_se, "\n")
+  cat("MLE Coefficients:\n", standard.estimates, "\n")
+  cat("MLE Standard Errors:\n",standard.se,"\n")  
+}
+
+
+
+
+
+
+set.seed(7)
+#try with N=10,50,100
+try(100)
+
+
+
+log_prior <- function(beta) {
+  sum(dnorm(beta, mean = 0, sd = 1, log = TRUE))
+}
+log_posterior <- function(beta, X, y) {
+  log_likelihood(beta, X, y) + log_prior(beta)
+}
+proposal_mean <- rep(0, p + 1)
+proposal_sd <- 5  
+proposal_cov <- diag(proposal_sd^2,p+1)
+
+
+```
+
+
+```{r}
+#Question no 4
+
+set.seed(7)
+
+n <- 100
+p <- 2
+
+X <- matrix(rnorm(n * p), n, p)
+
+# True coefficients
+#beta_true <- rnorm(p + 1, 0, 1)
+#beta_true <- c(0.1, 1.1, -0.9, 0.5, -1, -0.5, 0.7, 1.2, -0.4)
+beta_true <- c(0.1,1.1,-0.9)
+
+
+logit <- beta_true[1] + X %*% beta_true[-1]
+prob <- 1 / (1 + exp(-logit))
+y <- rbinom(n, 1, prob)
+log_likelihood <- function(beta, X, y) {
+  logit <- beta[1] + X %*% beta[-1]
+  prob <- 1 / (1 + exp(-logit))
+  sum(dbinom(y, size = 1, prob = prob, log = TRUE))
+}
+log_prior <- function(beta) {
+  sum(dnorm(beta, mean = 0, sd = 1, log = TRUE))
+}
+
+log_posterior <- function(beta, X, y) {
+  log_likelihood(beta, X, y) + log_prior(beta)
+}
+
+
+
+
+
+
+proposal_mean <- rep(0, p + 1)
+proposal_sd <- 5  
+proposal_cov <- diag(proposal_sd^2, p + 1)
+
+
+N <- 10000
+proposal_samples <- MASS::mvrnorm(N, mu = proposal_mean, Sigma = proposal_cov)
+log_posterior_vals <- apply(proposal_samples, 1, function(beta) log_posterior(beta, X = X, y = y))
+log_proposal_vals <- dmvnorm(proposal_samples, mean = proposal_mean, sigma = proposal_cov, log = TRUE)
+
+log_weights <- log_posterior_vals - log_proposal_vals
+weights <- exp(log_weights - max(log_weights))
+weights <- weights / sum(weights)  
+
+
+posterior_means <- colSums(weights * proposal_samples)
+
+posterior_se <- sqrt(colSums(weights * (proposal_samples - posterior_means)^2))
+
+effective_sample_size <- sum(weights)^2 / sum(weights^2)
+resample_indices <- sample(1:N, size = N, replace = TRUE, prob = weights)
+resampled_samples <- proposal_samples[resample_indices, ]
+
+par(mfrow = c(3, 3))
+for (i in 1:(p + 1)) {
+  hist(resampled_samples[, i], main = paste("Posterior of beta", i - 1), xlab = paste("beta", i - 1))
+}
+
+
+
+optim_results <- optim(par = rep(0, p + 1), fn = function(b) -log_posterior(b, X, y), method = "BFGS")
+posterior_mode <- optim_results$par
+
+proposal_mean_optimized <- posterior_mode
+proposal_sd <- 2  
+proposal_cov_optimized <- diag(proposal_sd^2, p + 1)
+
+
+
+proposal_samples_optimized <- MASS::mvrnorm(N, mu = proposal_mean_optimized, Sigma = proposal_cov_optimized)
+
+#log_posterior_vals_optimized <- apply(proposal_samples_optimized, 1, function(beta) log_posterior, X = X, y = y)
+
+log_posterior_vals_optimized <- apply(proposal_samples_optimized, 1, function(beta) {
+  log_posterior(beta, X = X, y = y)
+})
+
+
+
+log_proposal_vals_optimized <- dmvnorm(proposal_samples_optimized, mean = proposal_mean_optimized, sigma = proposal_cov_optimized, log = TRUE)
+
+log_weights_optimized <- log_posterior_vals_optimized - log_proposal_vals_optimized
+weights_optimized <- exp(log_weights_optimized - max(log_weights_optimized))
+weights_optimized <- weights_optimized / sum(weights_optimized)  
+posterior_means_optimized <- colSums(weights_optimized * proposal_samples_optimized)
+posterior_se_optimized <- sqrt(colSums(weights_optimized * (proposal_samples_optimized - posterior_means_optimized)^2))
+effective_sample_size_optimized <- sum(weights_optimized)^2 / sum(weights_optimized^2)
+
+cat("Posterior Means:\n", posterior_means, "\n")
+cat("Posterior Standard Errors:\n", posterior_se, "\n")
+cat("Effective Sample Size:\n", effective_sample_size, "\n\n")
+
+cat("Posterior Means:\n", posterior_means_optimized, "\n")
+cat("Posterior Standard Errors:\n", posterior_se_optimized, "\n")
+cat("Effective Sample Size:\n", effective_sample_size_optimized, "\n")
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
